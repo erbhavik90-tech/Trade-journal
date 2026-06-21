@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TraderOS Journal V1.5 Final</title>
+<style>
+body{font-family:Arial;background:#f5f1e8;max-width:1400px;margin:auto;padding:20px}
+.card,.box{background:#fff;padding:15px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:15px}
+.stats{display:grid;grid-template-columns:repeat(8,1fr);gap:10px}@media(max-width:1200px){.stats{grid-template-columns:repeat(4,1fr)}}
+.row4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.row5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+label{display:block;font-size:12px;font-weight:bold;margin-bottom:4px}
+input,select,textarea,button{width:100%;padding:10px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box}
+textarea{height:70px}
+button{background:#b58b3b;color:#fff;border:none;margin-top:10px}
+table{width:100%;border-collapse:collapse}
+th,td{border:1px solid #ddd;padding:8px;text-align:center}
+.progress{height:20px;background:#ddd;border-radius:20px;overflow:hidden}
+.fill{height:100%;background:#b58b3b;width:0%}
+</style>
+</head>
+<body>
+<h1>📒 TraderOS Journal V1.5 Final</h1>
+
+<div class="stats">
+<div class="card"><h3>Capital</h3><h2 id="capital">₹30000</h2></div>
+<div class="card"><h3>Total P&L</h3><h2 id="pnl">₹0</h2></div><div class="card"><h3>Charges</h3><h2 id="charges">₹0</h2></div><div class="card"><h3>Net P&L</h3><h2 id="netpnl">₹0</h2></div>
+<div class="card"><h3>Trades</h3><h2 id="trades">0</h2></div>
+<div class="card"><h3>Win Rate</h3><h2 id="winrate">0%</h2></div><div class="card"><h3>Wins</h3><h2 id="wins">0</h2></div><div class="card"><h3>Losses</h3><h2 id="losses">0</h2></div>
+</div>
+
+<div class="box">
+<h3>🎯 Goal ₹50,000</h3>
+<div class="progress"><div class="fill" id="fill"></div></div>
+<p id="goal"></p>
+</div>
+
+<div class="box">
+<h3>Add Trade</h3>
+
+<div class="row5">
+<div><label>Date</label><input type="date" id="date"></div>
+<div><label>Stock</label><input id="stock"></div>
+
+<div><label>Strategy</label><select id="strategy"><option>Heatmap Setup</option><option>VWAP Bounce</option><option>Breakout</option><option>Retest</option><option>Liquidity Sweep</option><option>ORB</option><option>Mother Candle</option></select></div>
+<div><label>Emotion</label><select id="emotion"><option>Calm</option><option>FOMO</option><option>Fear</option></select></div><div><label>Type</label><select id="tradeType"><option>Intraday</option><option>Swing</option></select></div>
+</div><br>
+
+<div class="row4">
+<div><label>Entry Price</label><input type="number" id="entry"></div>
+<div><label>Stop Loss</label><input type="number" id="sl"></div>
+<div><label>Exit Price</label><input type="number" id="exit"></div>
+<div><label>Quantity</label><input type="number" id="qty"></div>
+</div><br>
+
+<label>Notes</label>
+<textarea id="notes"></textarea>
+<div id="preview" style="font-weight:bold;margin:10px 0;color:#b58b3b">Expected P&L: ₹0 | RR: 0</div>
+<button onclick="saveTrade()">Save Trade</button>
+
+</div>
+
+<div class="box">
+<div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:10px;margin-bottom:10px">
+<div><input id="searchStock" placeholder="🔍 Search Stock" onkeyup="render()"></div>
+
+<div><select id="filterStrategy" onchange="render()"><option value="">All Strategies</option><option>Heatmap Setup</option><option>VWAP Bounce</option><option>Breakout</option><option>Retest</option><option>Liquidity Sweep</option><option>ORB</option><option>Mother Candle</option></select></div>
+<div><button onclick="exportCSV()" style="margin-top:0">Export CSV</button></div></div><table>
+<thead><tr><th>Date</th><th>Stock</th><th>Type</th><th>Strategy</th><th>Entry</th><th>SL</th><th>Exit</th><th>RR</th><th>Gross</th><th>Charges</th><th>Net</th><th>Emotion</th><th>Notes</th><th>Delete</th></tr></thead>
+<tbody id="tb"></tbody>
+</table>
+</div>
+
+<script>
+const START=30000,TARGET=50000;
+let data=JSON.parse(localStorage.getItem('traderos_v13')||'[]');
+
+function fd(d){if(!d)return '';let p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+
+function saveTrade(){
+let t={date:date.value,stock:stock.value,entry:+entry.value,sl:+sl.value,exit:+exit.value,qty:+qty.value,strategy:strategy.value,emotion:emotion.value,notes:notes.value,type:tradeType.value};
+t.pnl=(t.exit-t.entry)*t.qty;
+let turnover=(t.entry+t.exit)*t.qty;
+if(t.type==='Intraday'){
+ t.charges=(turnover*0.00035)+3;
+}else{
+ t.charges=(turnover*0.00095)+5;
+}
+t.net=t.pnl-t.charges;
+let risk=Math.abs(t.entry-t.sl),reward=Math.abs(t.exit-t.entry);
+t.rr=risk?(reward/risk).toFixed(2):0;
+data.unshift(t);
+localStorage.setItem('traderos_v13',JSON.stringify(data));
+date.value=new Date().toISOString().split('T')[0];
+stock.value='';entry.value='';sl.value='';exit.value='';qty.value='';notes.value='';
+updatePreview();render();
+}
+
+function deleteTrade(i){
+if(confirm('Delete trade?')){
+data.splice(i,1);
+localStorage.setItem('traderos_v13',JSON.stringify(data));
+render();
+}}
+function exportCSV(){
+let rows=['Date,Stock,Side,Strategy,Pnl'];
+data.forEach(t=>rows.push([t.date,t.stock,t.side,t.strategy,t.pnl].join(',')));
+let blob=new Blob([rows.join('\n')],{type:'text/csv'});
+let a=document.createElement('a');
+a.href=URL.createObjectURL(blob);
+a.download='TraderOS_Trades.csv';
+a.click();
+}
+function render(){
+tb.innerHTML='';
+let total=0,totalCharges=0,totalNet=0,winsCount=0,lossesCount=0;
+let s=(document.getElementById('searchStock')||{}).value?.toLowerCase()||'';
+let fs=(document.getElementById('filterSide')||{}).value||'';
+let fst=(document.getElementById('filterStrategy')||{}).value||'';
+let losses=0; data.forEach((t,i)=>{
+total+=Number(t.pnl)||0; totalCharges+=Number(t.charges)||0; totalNet+=Number(t.net)||0; if(Number(t.net)>0) winsCount++; else if(Number(t.net)<0) lossesCount++;
+if(s && !t.stock.toLowerCase().includes(s)) return;
+if(fs && t.side!==fs) return;
+if(fst && t.strategy!==fst) return;
+let clr=t.pnl>=0?'style="color:green;font-weight:bold"':'style="color:red;font-weight:bold"';
+tb.innerHTML+=`<tr><td>${fd(t.date)}</td><td>${t.stock}</td><td>${t.type||'Intraday'}</td><td>${t.strategy||''}</td><td>${t.entry}</td><td>${t.sl}</td><td>${t.exit}</td><td>${t.rr}</td><td>₹${t.pnl.toFixed(0)}</td><td>₹${(t.charges||0).toFixed(0)}</td><td ${clr}>₹${(t.net||t.pnl).toFixed(0)}</td><td>${t.emotion||''}</td><td>${(t.notes||'').substring(0,25)}</td><td><span style='cursor:pointer;color:red;font-size:18px' onclick='deleteTrade(${i})'>❌</span></td></tr>`;
+});
+let cap=START+totalNet;
+capital.innerText='₹'+cap.toFixed(2);
+pnl.innerText='₹'+total.toFixed(0); charges.innerText='₹'+totalCharges.toFixed(0); netpnl.innerText='₹'+totalNet.toFixed(0);
+trades.innerText=data.length;
+winrate.innerText=(data.length?(winsCount/data.length*100):0).toFixed(1)+'%';wins.innerText=winsCount;losses.innerText=lossesCount;
+let p=((cap-START)/(TARGET-START))*100;
+fill.style.width=Math.max(0,Math.min(100,p))+'%';
+goal.innerText='Remaining ₹'+Math.max(0,TARGET-cap).toFixed(0)+' | Progress '+p.toFixed(1)+'%';
+}
+
+function updatePreview(){
+let e=+entry.value||0,s=+sl.value||0,x=+exit.value||0,q=+qty.value||0;
+let pnl=(x-e)*q;
+let risk=Math.abs(e-s),reward=Math.abs(x-e);
+let rr=risk?(reward/risk).toFixed(2):0;
+document.getElementById('preview').innerHTML='Expected P&L: ₹'+pnl.toFixed(0)+' | RR: '+rr;
+}
+['entry','sl','exit','qty'].forEach(id=>{
+document.getElementById(id).addEventListener('input',updatePreview);
+});
+
+render();
+</script>
+</body>
+</html>
